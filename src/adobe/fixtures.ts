@@ -84,19 +84,18 @@ export const test = base.extend<AdobeFixtures & AdobeTestOptions>({
   context: async ({ assignedAccount, browser }, use, testInfo) => {
     assertAssignedAccount(assignedAccount, testInfo.title);
 
-    appendConsumedFragment(
-      {
-        email: assignedAccount.email,
-        consumed_at: new Date().toISOString(),
-      },
-      {
-        runId: requireAdobeRunId(),
-        workerIndex: testInfo.workerIndex,
-      },
-    );
-
     const context = await browser.newContext(buildContextOptions(testInfo.project.use));
     try {
+      appendConsumedFragment(
+        {
+          email: assignedAccount.email,
+          consumed_at: new Date().toISOString(),
+        },
+        {
+          runId: requireAdobeRunId(),
+          workerIndex: testInfo.workerIndex,
+        },
+      );
       await use(context);
     } finally {
       await context.close();

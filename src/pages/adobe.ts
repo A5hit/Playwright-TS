@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import {expect, Locator, Page} from "@playwright/test";
 
 export class AdobePage {
@@ -19,6 +20,7 @@ export class AdobePage {
     // UDS credential capture (for API-based Let's Go dismissal)
     private capturedAuthHeader = '';
     private capturedOwnerEntity = '';
+    private udsCapturing = false;
 
     constructor(page: Page) {
         this.page = page;
@@ -39,8 +41,11 @@ export class AdobePage {
     async adb_login(): Promise<void> {
         try {
             await this.page.goto("https://new.express.adobe.com/");
-            await this.page.waitForURL(/auth.services.adobe.com/,{waitUntil:'load'});
-        } catch (e) {}
+        } catch {
+            // goto can throw when Adobe immediately redirects to the auth server before
+            // navigation settles. waitForURL below confirms we actually landed there.
+        }
+        await this.page.waitForURL(/auth\.services\.adobe\.com/, { waitUntil: 'load' });
     }
 
     async fill_adb_email_field( email:string ): Promise<void> {
@@ -67,7 +72,7 @@ export class AdobePage {
         await expect(this.loadIndicator).toHaveCount(0, { timeout: 30_000 });
     }
 
-    async download_img(): Promise<string | null> {
+    async download_img(workerIndex: number = 0): Promise<string | null> {
         // waiting for the download event BEFORE clicking the final button
         const downloadPromise = this.page.waitForEvent('download',{timeout: 260000});
         await expect(this.downld_icon).toBeEnabled();
@@ -75,33 +80,30 @@ export class AdobePage {
         await this.single_img_radio_btn.click();
         await this.downld_btn.click();
 
-        //  Wait for the download process to complete
         const download = await downloadPromise;
 
-        // Save it to a specific path
-        const path = `./downloads/${download.suggestedFilename()}`;
-        await download.saveAs(path);
+        fs.mkdirSync('./downloads', { recursive: true });
+        const filePath = `./downloads/worker-${workerIndex}-${download.suggestedFilename()}`;
+        await download.saveAs(filePath);
 
-        return path;
+        return filePath;
     }
 
     async getLoginProvider(): Promise<string> {
         const supportedProviderPattern = /^https:\/\/(?:accounts\.google\.com|login\.microsoftonline\.com)\//i;
 
-        await this.page.waitForFunction(
+        // Return the URL from inside waitForFunction so it is captured atomically with
+        // the pattern check — no separate page.url() call that could race a redirect.
+        const handle = await this.page.waitForFunction(
             (patternSource) => {
-                return new RegExp(patternSource, 'i').test(window.location.href);
+                const url = window.location.href;
+                return new RegExp(patternSource, 'i').test(url) ? url : null;
             },
             supportedProviderPattern.source,
             { timeout: 90_000 }
         );
 
-        const providerUrl = this.page.url();
-        if (!supportedProviderPattern.test(providerUrl)) {
-            throw new Error(`Adobe login did not redirect to a supported provider. Current URL: ${providerUrl}`);
-        }
-
-        return providerUrl;
+        return await handle.jsonValue() as string;
     }
 
     async waitForDashboard(): Promise<void> {
@@ -145,7 +147,7 @@ export class AdobePage {
         await this.page.waitForLoadState('load', { timeout: 60_000 }).catch(() => {});
     }
 
-    async handle_letsGo(loginAccount: String): Promise<void> {
+    async handle_letsGo(loginAccount: string): Promise<void> {
         try{
             await this.letsGo_btn.waitFor({ state: 'visible',timeout:20000});
             await this.letsGo_btn.click({ timeout: 5000});
@@ -161,6 +163,9 @@ export class AdobePage {
      * Call this BEFORE dashboard loads (e.g., right after creating AdobePage).
      */
     startUdsCapture(): void {
+        if (this.udsCapturing) return;
+        this.udsCapturing = true;
+
         this.page.on('request', (req) => {
             if (!req.url().includes('/service/uds/userdocs/uds-projectx')) return;
 
