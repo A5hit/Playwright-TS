@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { appendCsvRow, writeCsvFile } from './csv';
+import { appendCsvRow, parseCsv, writeCsvFile } from './csv';
 import { loadConsumedLedgerRows, normalizeAdobeEmail } from './accounts';
 import {
   ADOBE_CONSUMED_HEADERS,
@@ -50,30 +50,37 @@ export function mergeAdobeRunArtifacts(options: {
   );
 
   const resultsPath = getAdobeResultsPath(options.finishedAt, cwd);
-  writeCsvFile(
-    resultsPath,
-    ADOBE_RESULTS_HEADERS,
-    resultsRows.map((row) => [
-      row.timestamp,
-      row.email,
-      row.test_status,
-      row.failed_at_step,
-      row.failure_reason,
-      row.duration_ms,
-      row.published_link,
-    ]),
-  );
-
   const consumedLedgerPath = getAdobeConsumedLedgerPath(cwd);
   const existingLedgerRows = loadConsumedLedgerRows(consumedLedgerPath);
   const mergedConsumedRows = dedupeConsumedRows([...existingLedgerRows, ...consumedRows]);
-  writeCsvFile(
-    consumedLedgerPath,
-    ADOBE_CONSUMED_HEADERS,
-    mergedConsumedRows.map((row) => [row.email, row.consumed_at]),
-  );
+  const consumedLedgerTmp = `${consumedLedgerPath}.tmp`;
 
-  fs.rmSync(tmpDir, { force: true, recursive: true });
+  try {
+    writeCsvFile(
+      resultsPath,
+      ADOBE_RESULTS_HEADERS,
+      resultsRows.map((row) => [
+        row.timestamp,
+        row.email,
+        row.test_status,
+        row.failed_at_step,
+        row.failure_reason,
+        row.duration_ms,
+        row.published_link,
+      ]),
+    );
+
+    writeCsvFile(
+      consumedLedgerTmp,
+      ADOBE_CONSUMED_HEADERS,
+      mergedConsumedRows.map((row) => [row.email, row.consumed_at]),
+    );
+    fs.renameSync(consumedLedgerTmp, consumedLedgerPath);
+  } finally {
+    fs.rmSync(consumedLedgerTmp, { force: true });
+    fs.rmSync(tmpDir, { force: true, recursive: true });
+  }
+
   return { consumedLedgerPath, resultsPath };
 }
 
@@ -106,7 +113,7 @@ function loadRowsFromFragments<T extends Record<string, string>>(
         continue;
       }
 
-      const parsedLine = parseFragmentLine(line);
+      const parsedLine = parseCsv(line)[0] ?? [];
       const row: Record<string, string> = {};
       headers.forEach((header, index) => {
         row[header] = parsedLine[index] ?? '';
@@ -117,46 +124,6 @@ function loadRowsFromFragments<T extends Record<string, string>>(
   return rows;
 }
 
-function parseFragmentLine(line: string): string[] {
-  const values: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-
-    if (inQuotes) {
-      if (char === '"') {
-        const next = line[index + 1];
-        if (next === '"') {
-          current += '"';
-          index += 1;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        current += char;
-      }
-      continue;
-    }
-
-    if (char === '"') {
-      inQuotes = true;
-      continue;
-    }
-
-    if (char === ',') {
-      values.push(current);
-      current = '';
-      continue;
-    }
-
-    current += char;
-  }
-
-  values.push(current);
-  return values;
-}
 
 function dedupeConsumedRows(rows: AdobeConsumedRow[]): AdobeConsumedRow[] {
   const deduped = new Map<string, AdobeConsumedRow>();

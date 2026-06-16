@@ -22,13 +22,8 @@ export class EditorDashboard {
     }
 
     async clickOpenInEditor(): Promise<void> {
-        try {
-            await expect(this.openInEditor).toBeEnabled({ timeout: 20000 })
-            await this.openInEditor.click({ timeout: 20000 });
-            // await this.page.waitForLoadState('networkidle', { timeout: 20000 });
-        } catch (e) {
-            console.log('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  Open In Editor Button NOT VISIBLE  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', e);
-        }
+        await expect(this.openInEditor).toBeEnabled({ timeout: 20000 });
+        await this.openInEditor.click({ timeout: 20000 });
     }
 
     async skipTutorial(): Promise<void> {
@@ -54,51 +49,31 @@ export class EditorDashboard {
     }
 
     async clickShare(): Promise<void> {
-        try {
-            await expect(this.navSharebtn).toBeEnabled({ timeout: 20000 });
-            await this.navSharebtn.click({ timeout: 20000 });
-            // await this.page.waitForLoadState('networkidle', { timeout: 5000 });
-        } catch (e) {
-            console.log('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  Share Button NOT VISIBLE  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', e);
-        }
+        await expect(this.navSharebtn).toBeEnabled({ timeout: 20000 });
+        await this.navSharebtn.click({ timeout: 20000 });
     }
 
     async openViewOnlyLink(): Promise<void> {
-        try {
-            await expect(this.viewOnlyLink).toBeEnabled({ timeout: 20000 });
-            await this.viewOnlyLink.click({ timeout: 20000 });
-            // Verify the "View-only link" sub-panel actually opened
-            await this.page.getByText('A view-only link allows anyone to see the file').waitFor({ state: 'visible', timeout: 15000 });
-        } catch (e) {
-            console.log('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  View Only Link NOT VISIBLE  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', e);
-        }
+        await expect(this.viewOnlyLink).toBeEnabled({ timeout: 20000 });
+        await this.viewOnlyLink.click({ timeout: 20000 });
+        await this.page.getByText('A view-only link allows anyone to see the file').waitFor({ state: 'visible', timeout: 15000 });
     }
 
     async clickCreateLink(): Promise<void> {
-        try {
-            await expect(this.createLinkBtn).toBeEnabled({ timeout: 20000 });
-            await this.createLinkBtn.click({ timeout: 20000 });
-            // Wait for the Copy link button to appear (indicates link generation started)
-            await expect(this.copyLinkBtn).toBeVisible({ timeout: 30000 });
-        } catch (e) {
-            console.log('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  Create Link Button NOT VISIBLE  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', e);
-        }
+        await expect(this.createLinkBtn).toBeEnabled({ timeout: 20000 });
+        await this.createLinkBtn.click({ timeout: 20000 });
+        await expect(this.copyLinkBtn).toBeVisible({ timeout: 30000 });
     }
 
     async clickCopyLink(): Promise<string> {
-        try {
-            await expect(this.copyLinkBtn).toBeEnabled({ timeout: 20000 });
-            await this.copyLinkBtn.click({ timeout: 20000 });
+        await expect(this.copyLinkBtn).toBeEnabled({ timeout: 20000 });
+        await this.copyLinkBtn.click({ timeout: 20000 });
 
-            // Wait for the Published URL input to have a non-empty value (fixes race condition & pierces Shadow DOM)
-            await expect(this.publishUrl).toHaveValue(/https:\/\/new\.express\.adobe\.com/, { timeout: 30000 });
+        // Wait for the Published URL input to have a non-empty value (fixes race condition & pierces Shadow DOM)
+        await expect(this.publishUrl).toHaveValue(/https:\/\/new\.express\.adobe\.com/, { timeout: 30000 });
 
-            const link = await this.publishUrl.inputValue() ?? '';
-            console.log('Publish Link: ', link);
-            return link.trim();
-        } catch (e) {
-            console.log('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  Copy Link Button NOT VISIBLE  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', e);
-            return '';
-        }
+        const link = await this.publishUrl.inputValue();
+        console.log('Publish Link: ', link);
+        return link.trim();
     }
 }

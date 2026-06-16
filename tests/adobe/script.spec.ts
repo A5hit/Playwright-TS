@@ -73,7 +73,7 @@ defineAdobeAccountTests('script flow', async ({ page, account, stepTracker }, te
 
   
 //   stepTracker.setStep('Download');
-//   const filePath = await adobe.download_img();
+//   const filePath = await adobe.download_img(testInfo.workerIndex);
   
 //   // 3. Optional: Assertion to verify the download happened
 //   console.log(`File saved to: ${filePath}`);
