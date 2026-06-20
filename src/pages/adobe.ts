@@ -16,11 +16,19 @@ export class AdobePage {
     readonly cmp_option : Locator;
     readonly genratedImg : Locator;
     readonly letsGoIndicator : Locator;
+    readonly createNew : Locator;
+    readonly squareTemplate : Locator;
+    readonly searchBar : Locator;
+    readonly resultCountText : Locator;
+    readonly templateResult : Locator;
 
     // UDS credential capture (for API-based Let's Go dismissal)
     private capturedAuthHeader = '';
     private capturedOwnerEntity = '';
     private udsCapturing = false;
+
+
+    private randomSearchKeywords : string[];
 
     constructor(page: Page) {
         this.page = page;
@@ -36,6 +44,12 @@ export class AdobePage {
         this.cmp_option = page.getByText('Company or School Account');
         this.genratedImg = page.getByTestId('firefly-thumbnail-image').first();
         this.letsGoIndicator = page.getByRole('heading', { name: /Help us customize your experience\./i });
+        this.createNew = page.getByRole('button', { name: 'Create new' });
+        this.squareTemplate = page.getByText('Square', { exact: true });
+        this.searchBar = page.getByRole('combobox', { name: 'Search Instagram square post' });
+        this.randomSearchKeywords = ['Yoga Day', 'Festival', 'Birthday', 'Sale', 'Wedding'];
+        this.resultCountText = page.getByTestId('results-count-text');
+        this.templateResult = page.locator('button.thumbnail-button-filler').first();
     }
 
     async adb_login(): Promise<void> {
@@ -253,5 +267,48 @@ export class AdobePage {
 
         // Fallback: use the original UI click approach
         await this.handle_letsGo(loginAccount);
+    }
+
+    async createTemplate(): Promise<void> {
+        await expect(this.createNew).toBeEnabled({timeout:20000})
+        await this.createNew.click({timeout:20000});
+        await expect(this.squareTemplate).toBeVisible({timeout:10000})
+        await this.squareTemplate.click({timeout:10000});   
+    }
+
+    getRandomSearchKeyword(): string {
+        const i = Math.floor(Math.random() * this.randomSearchKeywords.length);
+        return this.randomSearchKeywords[i];
+    }
+
+    async searchForTemplate(templateName: string): Promise<void> {
+        await expect(this.searchBar).toBeEnabled({timeout:20000})
+        // A late "Try the updated editor" coachmark can intercept this click; the
+        // addLocatorHandler registered in EditorDashboard.skipTutorial auto-dismisses
+        // it and retries, so no explicit guard is needed here.
+        await this.searchBar.click({timeout:20000});
+        await this.searchBar.pressSequentially(templateName);
+        await this.searchBar.press("Enter");
+    }
+
+    async selectTemplate(templateName: string): Promise<void> {
+        await expect(this.resultCountText).toBeVisible({timeout:10000});
+        const text = await this.resultCountText.innerText();
+        // The count text format varies: it echoes the query for narrow searches
+        // ("878 results for "Birthday""), but shows a generic count for large
+        // categories ("11,000+ results"). Verify the keyword only when it's echoed;
+        // otherwise just confirm the search returned matches.
+        if (/results for/i.test(text)) {
+            expect(text).toContain(templateName);
+        } else {
+            expect(text).toMatch(/\d[\d,]*\+?\s+results/i);
+        }
+
+        await expect(this.templateResult).toBeVisible({timeout:10000});
+        // The first result is often an animated template: a hover-preview <video> and
+        // the sticky search header overlay the (empty) filler button, so a real click
+        // is intercepted. Invoke the button's own click handler directly to bypass the
+        // occluding layers.
+        await this.templateResult.evaluate((el) => (el as HTMLElement).click());
     }
 }
