@@ -29,15 +29,17 @@ export class EditorDashboard {
     }
 
     async skipTutorial(): Promise<void> {
-        // 1. Try to skip tutorial tour (if visible)
-        try {
-            const skipTourBtn = this.page.getByRole('button', { name: 'Skip tour' }).or(this.page.getByText('Skip tour'));
-            if (await skipTourBtn.isVisible()) {
-                await skipTourBtn.click({ timeout: 5000 });
-            }
-        } catch (e) {
-            console.log('skipTutorial: error checking/clicking Skip tour', e);
-        }
+        // 1. The "Try the updated editor" coachmark tour appears at an unpredictable
+        // time — often AFTER this method runs — and its underlay intercepts pointer
+        // events on later steps (e.g. the search bar). A one-shot dismiss races that
+        // timing, so register an auto-handler instead: whenever "Skip tour" becomes
+        // visible during ANY subsequent action, Playwright clicks it and retries the
+        // action. This is the idiomatic fix for intermittent overlays and carries no
+        // fixed wait penalty when no tour appears.
+        await this.page.addLocatorHandler(
+            this.page.getByRole('button', { name: 'Skip tour' }),
+            async (locator) => { await locator.click({ timeout: 5000 }).catch(() => { /* tour may close on its own */ }); },
+        );
 
         // 2. Try to dismiss quick tips / popups (if visible)
         try {
@@ -57,8 +59,14 @@ export class EditorDashboard {
     }
 
     async openViewOnlyLink(): Promise<void> {
-        // Required step — fail fast instead of swallowing and continuing.
-        await expect(this.viewOnlyLink).toBeEnabled({ timeout: 20000 });
+        // After clicking Share, Adobe shows "We're working on your file…" while it
+        // prepares the doc; the share options (incl. "View-only link") only appear
+        // once that completes. The prep message renders a beat AFTER the Share click,
+        // so waiting on it races its delayed render. Instead wait directly for the
+        // end state — the View-only link menuitem — with a timeout generous enough
+        // to cover file prep. Some accounts' files prep slowly (>120s), so allow 180s;
+        // this still fits the 360s per-test budget alongside the downstream link steps.
+        await expect(this.viewOnlyLink).toBeEnabled({ timeout: 180_000 });
         await this.viewOnlyLink.click({ timeout: 20000 });
         await expect(this.createLinkBtn).toBeVisible({ timeout: 30000 });
     }
@@ -67,16 +75,21 @@ export class EditorDashboard {
         // Required step — fail fast instead of swallowing and continuing.
         await expect(this.createLinkBtn).toBeEnabled({ timeout: 20000 });
         await this.createLinkBtn.click({ timeout: 20000 });
-        // Wait for the Copy link button to appear (indicates link generation started)
-        await expect(this.copyLinkBtn).toBeVisible({ timeout: 30000 });
+        // Link generation is done when EITHER a "Copy link" button appears (one panel
+        // variant) OR the published URL is rendered directly with an icon copy control
+        // (another variant). Wait for whichever shows up so both variants proceed.
+        await expect(this.copyLinkBtn.or(this.publishUrl).first()).toBeVisible({ timeout: 30000 });
     }
 
     async clickCopyLink(): Promise<string> {
-        // Required step — fail fast instead of swallowing and returning ''.
-        await expect(this.copyLinkBtn).toBeEnabled({ timeout: 20000 });
-        await this.copyLinkBtn.click({ timeout: 20000 });
+        // Best-effort: if this panel variant has a "Copy link" button, click it (puts the
+        // URL on the clipboard). The other variant renders only the link with an icon
+        // control and no labeled button — in that case skip the click. Either way, the
+        // rendered published URL is the source of truth, so read the href from it.
+        if (await this.copyLinkBtn.isVisible().catch(() => false)) {
+            await this.copyLinkBtn.click({ timeout: 20000 }).catch(() => { /* link still readable below */ });
+        }
 
-        // The redesigned share panel renders the published URL as a link, not an input.
         await expect(this.publishUrl).toHaveAttribute('href', /https:\/\/new\.express\.adobe\.com\/publishedV2\//, { timeout: 30000 });
 
         const link = await this.publishUrl.getAttribute('href') ?? '';
