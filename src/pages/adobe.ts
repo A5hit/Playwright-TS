@@ -89,6 +89,17 @@ export class AdobePage {
         await expect(this.loadIndicator).toHaveCount(0, { timeout: 30_000 });
     }
 
+    /**
+     * @deprecated For the template flow use EditorDashboard.downloadDesign() instead.
+     *
+     * This belongs to the Firefly text-to-image path: downld_icon/downld_btn are labelled
+     * "Download" there and the panel offers a "Selected image" radio. The template editor
+     * exposes none of that — its trigger is an unlabelled shadow-DOM
+     * [data-testid="editor-download-button"] and the panel has a file-format picker
+     * (verified by tests/adobe/experiment-v8.spec.ts). It is also bound to whichever page
+     * AdobePage was constructed with, which is the login tab in the current flow, not the
+     * tab holding the design. Kept for the generation flow (wait_for_generation) only.
+     */
     async download_img(workerIndex: number = 0): Promise<string | null> {
         // waiting for the download event BEFORE clicking the final button
         const downloadPromise = this.page.waitForEvent('download',{timeout: 260000});

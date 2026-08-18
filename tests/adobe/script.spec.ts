@@ -8,6 +8,9 @@ import { EditorDashboard } from '../../src/pages/editorDashboard';
 const FIXED_POSTCARD_URL = 'https://new.express.adobe.com/design/template/urn:aaid:sc:VA6C2:f2c97bf0-1039-5b0d-be7a-528c0060757b?category=text&entryPoint=template&taskID=postcard';
 
 defineAdobeAccountTests('script flow', async ({ page, context, account, stepTracker }, testInfo) => {
+    // Stamped first so the share→publish retry can tell how much of testInfo.timeout is
+    // left before it commits to another attempt.
+    const testStartedAt = Date.now();
     const adobe = new AdobePage(page);
     let editor: EditorDashboard;   // bound to the postcard tab once it opens
     const ms = new MsProvider(page);
@@ -43,7 +46,7 @@ defineAdobeAccountTests('script flow', async ({ page, context, account, stepTrac
 
   stepTracker.setStep('Navigate to Fixed Postcard');
   // Settle buffer to let late dashboard content/interrupts render.
-  await page.waitForTimeout(120_000);
+  await page.waitForTimeout(1200);
   const postcardPage = await context.newPage();
   await postcardPage.goto(FIXED_POSTCARD_URL, { waitUntil: 'load' });
   editor = new EditorDashboard(postcardPage);   // rebind; original tab stays open
@@ -82,14 +85,15 @@ defineAdobeAccountTests('script flow', async ({ page, context, account, stepTrac
   // await editor.clickOpenInEditor();
 
 
-  stepTracker.setStep('Click Share button');
-  await editor.clickShare();
-
-  stepTracker.setStep('Open View Only Link');
-  await editor.openViewOnlyLink();
-
-  stepTracker.setStep('Click Create Link button');
-  await editor.clickCreateLink();
+  // Share → publish produced 33 of 42 failures in the 2026-08-05 run, and they were
+  // transient (bursty, both workers at once) rather than account-specific — so run the
+  // leg with a reset-and-retry instead of a single pass. onStep keeps the CSV's
+  // failed_at_step as granular as the three separate setStep calls it replaces, and
+  // budgetLeftMs stops a retry that could not finish inside the test timeout.
+  await editor.sharePublishWithRetry({
+    onStep: (step) => stepTracker.setStep(step),
+    budgetLeftMs: () => testInfo.timeout - (Date.now() - testStartedAt),
+  });
 
   stepTracker.setStep('Click Copy Link button');
   const link = await editor.clickCopyLink();
@@ -102,12 +106,15 @@ defineAdobeAccountTests('script flow', async ({ page, context, account, stepTrac
     contentType: 'application/json',
   });
 
-  
-//   stepTracker.setStep('Download');
-//   const filePath = await adobe.download_img(testInfo.workerIndex);
-  
-//   // 3. Optional: Assertion to verify the download happened
-//   console.log(`File saved to: ${filePath}`);
-//   expect(filePath).toBeTruthy();
+
+  // Downloads from `editor`, not `adobe`: the design is on the postcard tab while AdobePage
+  // stays bound to the login tab. adobe.download_img() looked there — which is why every
+  // account in the 2026-08-18 run failed at this step — and it also still clicked the
+  // Firefly-era 'Selected image' radio, which this editor's download panel does not have.
+  // Both confirmed live by tests/adobe/experiment-v8.spec.ts.
+  stepTracker.setStep('Download');
+  const filePath = await editor.downloadDesign(testInfo.workerIndex);
+  console.log(`File saved to: ${filePath}`);
+  expect(filePath).toBeTruthy();
 
 });

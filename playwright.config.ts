@@ -53,7 +53,12 @@ export default defineConfig({
     ['html'],
     [path.resolve(__dirname, 'src/adobe/reporter.ts')],
   ],
-  timeout: 360_000,
+  // Raised from 360s to fit the share→publish retry (EditorDashboard.sharePublishWithRetry).
+  // A single pass of that leg can already reach ~360s on its own worst case (two 180s file-prep
+  // waits), so a second attempt had no room under the old budget. sharePublishWithRetry checks
+  // the remaining budget before starting a retry, so this ceiling bounds the retry rather than
+  // being spent by default — passing accounts averaged 84s in the 2026-08-05 run.
+  timeout: 600_000,
   expect:{
     timeout: 120_000,
   },
