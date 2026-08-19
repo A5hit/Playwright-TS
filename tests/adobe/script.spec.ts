@@ -1,5 +1,4 @@
 import { defineAdobeAccountTests, expect } from '../../src/adobe/spec';
-import { ADOBE_LINK_ATTACHMENT } from '../../src/adobe/runtime';
 import { AdobePage } from "../../src/pages/adobe";
 import { GmailProvider } from "../../src/pages/gmailProvider";
 import { MsProvider} from "../../src/pages/msProvider";
@@ -8,9 +7,6 @@ import { EditorDashboard } from '../../src/pages/editorDashboard';
 const FIXED_POSTCARD_URL = 'https://new.express.adobe.com/design/template/urn:aaid:sc:VA6C2:f2c97bf0-1039-5b0d-be7a-528c0060757b?category=text&entryPoint=template&taskID=postcard';
 
 defineAdobeAccountTests('script flow', async ({ page, context, account, stepTracker }, testInfo) => {
-    // Stamped first so the share→publish retry can tell how much of testInfo.timeout is
-    // left before it commits to another attempt.
-    const testStartedAt = Date.now();
     const adobe = new AdobePage(page);
     let editor: EditorDashboard;   // bound to the postcard tab once it opens
     const ms = new MsProvider(page);
@@ -85,28 +81,11 @@ defineAdobeAccountTests('script flow', async ({ page, context, account, stepTrac
   // await editor.clickOpenInEditor();
 
 
-  // Share → publish produced 33 of 42 failures in the 2026-08-05 run, and they were
-  // transient (bursty, both workers at once) rather than account-specific — so run the
-  // leg with a reset-and-retry instead of a single pass. onStep keeps the CSV's
-  // failed_at_step as granular as the three separate setStep calls it replaces, and
-  // budgetLeftMs stops a retry that could not finish inside the test timeout.
-  await editor.sharePublishWithRetry({
-    onStep: (step) => stepTracker.setStep(step),
-    budgetLeftMs: () => testInfo.timeout - (Date.now() - testStartedAt),
-  });
-
-  stepTracker.setStep('Click Copy Link button');
-  const link = await editor.clickCopyLink();
-  console.log('Link Copied: ' + link);
-  expect(link).toBeTruthy();
-
-  // Attach published link to test results for CSV report
-  await testInfo.attach(ADOBE_LINK_ATTACHMENT, {
-    body: Buffer.from(JSON.stringify({ publishedLink: link }), 'utf8'),
-    contentType: 'application/json',
-  });
-
-
+  // Share→publish→copy-link removed (ported from experiment-v9): the download does not
+  // need a published doc — v9's headed run confirmed downloadDesign renders and commits
+  // straight from the editor. No link attachment either, so CSV rows have an empty
+  // published-link column (the reporter reads it optionally).
+  //
   // Downloads from `editor`, not `adobe`: the design is on the postcard tab while AdobePage
   // stays bound to the login tab. adobe.download_img() looked there — which is why every
   // account in the 2026-08-18 run failed at this step — and it also still clicked the
