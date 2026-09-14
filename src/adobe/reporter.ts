@@ -73,7 +73,8 @@ export default class AdobeCsvReporter implements Reporter {
 }
 
 function isAdobeProjectTest(test: TestCase): boolean {
-  return test.titlePath()[1] === 'adobe-chromium';
+  // Matches adobe-chromium and adobe-firefox; excludes internal-chromium.
+  return test.titlePath()[1]?.startsWith('adobe-') ?? false;
 }
 
 function mapStatus(status: TestResult['status']): AdobeResultStatus {
