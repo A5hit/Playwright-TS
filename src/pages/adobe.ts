@@ -135,11 +135,21 @@ export class AdobePage {
     }
 
     async waitForDashboard(): Promise<void> {
+        // Accept BOTH dashboard hosts. A successful login lands on new.express.adobe.com
+        // for most accounts, but some (observed on education/regional accounts) settle on
+        // the bare express.adobe.com host instead — the same functional dashboard ("What
+        // would you like to create today?"), just a different origin. Gating only on the
+        // "new." host timed out those working sessions before the interruption handlers
+        // below could even install. Downstream steps are host-independent: the postcard is
+        // opened via an explicit goto to new.express.adobe.com regardless of where the
+        // dashboard landed. The optional "new." prefix matches either host and still
+        // excludes the auth origin (auth.services.adobe.com / adobeid-na1…).
+        const dashboardUrlPattern = /(?:new\.)?express\.adobe\.com/;
         try {
-            await this.page.waitForURL(/new.express.adobe.com/, { timeout: 120_000 });
-            await expect(this.page).toHaveURL(/.*new\.express\.adobe\.com/);
+            await this.page.waitForURL(dashboardUrlPattern, { timeout: 120_000 });
+            await expect(this.page).toHaveURL(dashboardUrlPattern);
         } catch (e) {
-            throw new Error(`Failed to navigate to Adobe Dashboard (new.express.adobe.com). Login likely failed. Original error: ${e}`);
+            throw new Error(`Failed to navigate to Adobe Dashboard (new.express.adobe.com or express.adobe.com). Login likely failed. Original error: ${e}`);
         }
 
         await this.installDashboardInterruptionHandlers();

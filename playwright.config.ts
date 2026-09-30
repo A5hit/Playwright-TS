@@ -41,7 +41,14 @@ const GPU_MODE = 'headless' as 'off' | 'headed' | 'headless';
 const GPU_ARGS = ['--ignore-gpu-blocklist', '--enable-gpu', '--enable-webgl', '--use-angle=d3d11'];
 
 const adobeWorkers = GPU_MODE === 'headed' ? 1 : (BULK ? WORKERS : undefined);
-const adobeLaunchOptions = GPU_MODE === 'off' ? undefined : { args: GPU_ARGS };
+// '--disable-blink-features=AutomationControlled' hides navigator.webdriver, the signal
+// Google's federated sign-in keys off to reject the login with "Couldn't sign you in —
+// This browser or app may not be secure" (it blocks at the EMAIL step, before credentials
+// are ever checked). Without this flag the 2026-09-29 headless runs failed 100% on that
+// block. Verified fix: with it, accounts pass in plain headless with parallel workers
+// (3/3 in 37.8s), so no headed mode or worker-count sacrifice is needed.
+const STEALTH_ARGS = ['--disable-blink-features=AutomationControlled'];
+const adobeLaunchOptions = GPU_MODE === 'off' ? { args: STEALTH_ARGS } : { args: [...GPU_ARGS, ...STEALTH_ARGS] };
 
 export default defineConfig({
   testDir: './tests',
