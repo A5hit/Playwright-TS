@@ -1,5 +1,4 @@
 import { defineAdobeAccountTests, expect } from '../../src/adobe/spec';
-import { ADOBE_LINK_ATTACHMENT } from '../../src/adobe/runtime';
 import { AdobePage } from "../../src/pages/adobe";
 import { GmailProvider } from "../../src/pages/gmailProvider";
 import { MsProvider} from "../../src/pages/msProvider";
@@ -43,7 +42,7 @@ defineAdobeAccountTests('script flow', async ({ page, context, account, stepTrac
 
   stepTracker.setStep('Navigate to Fixed Postcard');
   // Settle buffer to let late dashboard content/interrupts render.
-  await page.waitForTimeout(120_000);
+  await page.waitForTimeout(1200);
   const postcardPage = await context.newPage();
   await postcardPage.goto(FIXED_POSTCARD_URL, { waitUntil: 'load' });
   editor = new EditorDashboard(postcardPage);   // rebind; original tab stays open
@@ -82,32 +81,19 @@ defineAdobeAccountTests('script flow', async ({ page, context, account, stepTrac
   // await editor.clickOpenInEditor();
 
 
-  stepTracker.setStep('Click Share button');
-  await editor.clickShare();
-
-  stepTracker.setStep('Open View Only Link');
-  await editor.openViewOnlyLink();
-
-  stepTracker.setStep('Click Create Link button');
-  await editor.clickCreateLink();
-
-  stepTracker.setStep('Click Copy Link button');
-  const link = await editor.clickCopyLink();
-  console.log('Link Copied: ' + link);
-  expect(link).toBeTruthy();
-
-  // Attach published link to test results for CSV report
-  await testInfo.attach(ADOBE_LINK_ATTACHMENT, {
-    body: Buffer.from(JSON.stringify({ publishedLink: link }), 'utf8'),
-    contentType: 'application/json',
-  });
-
-  
-//   stepTracker.setStep('Download');
-//   const filePath = await adobe.download_img(testInfo.workerIndex);
-  
-//   // 3. Optional: Assertion to verify the download happened
-//   console.log(`File saved to: ${filePath}`);
-//   expect(filePath).toBeTruthy();
+  // Share→publish→copy-link removed (ported from experiment-v9): the download does not
+  // need a published doc — v9's headed run confirmed downloadDesign renders and commits
+  // straight from the editor. No link attachment either, so CSV rows have an empty
+  // published-link column (the reporter reads it optionally).
+  //
+  // Downloads from `editor`, not `adobe`: the design is on the postcard tab while AdobePage
+  // stays bound to the login tab. adobe.download_img() looked there — which is why every
+  // account in the 2026-08-18 run failed at this step — and it also still clicked the
+  // Firefly-era 'Selected image' radio, which this editor's download panel does not have.
+  // Both confirmed live by tests/adobe/experiment-v8.spec.ts.
+  stepTracker.setStep('Download');
+  const filePath = await editor.downloadDesign(testInfo.workerIndex);
+  console.log(`File saved to: ${filePath}`);
+  expect(filePath).toBeTruthy();
 
 });

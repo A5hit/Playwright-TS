@@ -19,7 +19,9 @@ This project is a **Playwright-based E2E test suite** that automates the followi
 
 Tests are **data-driven** — each test run consumes one or more accounts from a CSV file, marks them as consumed, and produces a results CSV report.
 
-> **Note:** The earlier Text-to-Image **image-generation + download** path (`shortcut()`, `wait_for_generation()`, `download_img()`, `clickOpenInEditor()`) is no longer part of the active flow. Those steps are commented out in `script.spec.ts` and the methods are retained as legacy helpers. See §8.
+> **Note:** The earlier Text-to-Image **image-generation** path (`shortcut()`, `wait_for_generation()`, `download_img()`, `clickOpenInEditor()`) is no longer part of the active flow. Those steps are commented out in `script.spec.ts` and the methods are retained as legacy helpers. See §8.
+>
+> Downloading the design **is** part of the active flow again, but via `EditorDashboard.downloadDesign()` — `download_img()` cannot work here (wrong tab + Firefly-era locators). See the Download note in §8.
 
 ---
 
@@ -175,6 +177,9 @@ All locators defined in the [EditorDashboard constructor](file:///c:/Users/QA/We
 | `createLinkBtn` | `getByText('Create link').first()` | `clickCreateLink` |
 | `copyLinkBtn` | `getByRole('button', { name: 'Copy link' })` | `clickCreateLink`, `clickCopyLink` |
 | `publishUrl` | `locator('a[href^="https://new.express.adobe.com/publishedV2/"]').first()` | `clickCreateLink`, `clickCopyLink` |
+| `downloadTrigger` | `locator('[data-testid="editor-download-button"]')` | `downloadDesign` |
+| `fileFormatPicker` | `locator('[data-testid="file-format-picker"]')` | *(unused — defaults to PNG)* |
+| `downloadCommitBtn` | `locator('[data-testid="download-commit-button"]')` | `downloadDesign` |
 
 ### 5d. EditorDashboard — Key Methods Reference
 
@@ -186,6 +191,7 @@ All locators defined in the [EditorDashboard constructor](file:///c:/Users/QA/We
 | `openViewOnlyLink()` | Open the Create-link flow (variant-aware) | Waits up to **180s** (covers slow file prep) for whichever entry point appears, then opens it: classic **"View-only link" menuitem** or the new **"Share file" panel's "Publish" tab**. Then waits up to **180s** for "Create link" |
 | `clickCreateLink()` | Click "Create link" to generate the URL | Waits for **either** the "Copy link" button **or** the rendered published URL — supports both share-panel variants |
 | `clickCopyLink()` | Read the published view-only URL | Clicks "Copy link" if present (best-effort); the rendered `publishedV2` `<a href>` is the source of truth. Returns the URL string |
+| `downloadDesign(workerIndex)` | Export the open design to `./downloads/worker-N-<name>.png` | Dismisses the still-open modal publish panel, then clicks the nav download trigger → the panel's commit button, and returns the saved path. Format picker is left at its PNG default. See the note in §8 |
 
 ---
 
@@ -325,6 +331,25 @@ flowchart LR
 
 > [!NOTE]
 > **Legacy image-generation path:** `shortcut()`, `wait_for_generation()`, `download_img()` (AdobePage) and `clickOpenInEditor()` (EditorDashboard) belong to the original Text-to-Image generate-and-download flow. They are retained but commented out of `script.spec.ts`; the active flow uses the template search + view-only-link path.
+
+> [!IMPORTANT]
+> **Download step — why it is on EditorDashboard, not AdobePage.** The `Download` step is back in the active flow, but it calls `EditorDashboard.downloadDesign()`, **not** `AdobePage.download_img()`. Every account in the 2026-08-18 run failed at this step with `download_img()`, for two independent reasons confirmed live by [experiment-v8.spec.ts](file:///c:/Users/QA/WebstormProjects/Adobe_V2/tests/adobe/experiment-v8.spec.ts):
+>
+> 1. **Wrong tab.** `AdobePage` is constructed on the login tab, but the design opens in a second tab (`context.newPage()`). Probing both tabs after publish, the login tab has **zero** download controls (`getByLabel('Download')` → 0, `#download-btn` → 0) while the editor tab has them — hence `element(s) not found` after 120s, and `Target page, context or browser has been closed` when the context tore down mid-`waitForEvent('download')`.
+> 2. **Firefly-era locators.** `download_img()` clicks `getByText('Selected image')`, which belongs to the text-to-image panel. Count in the template editor's download panel: **0**.
+>
+> The template editor's download controls have **no accessible name** and live in a **shadow root** (so they are absent from `page.content()` and invisible to `getByRole`/`getByLabel`) — `data-testid` is the only usable handle:
+>
+> | Control | Selector | Notes |
+> |---------|----------|-------|
+> | Nav trigger | `[data-testid="editor-download-button"]` (`#download-btn`) | Icon-only, no aria-label and no text |
+> | Format picker | `[data-testid="file-format-picker"]` | Options: `download-png` (default), `download-jpg`, `download-pdf`, `download-pdf-print` |
+> | Commit button | `[data-testid="download-commit-button"]` (`#dialog-download-btn`) | Labelled "Download" |
+>
+> **The publish panel must be dismissed first.** After `clickCopyLink()` the "Share file" panel is still open and it is a real modal `<dialog>`, which makes the rest of the page **inert**. The nav trigger stays visible and enabled the whole time, yet the click never lands. Its own close button is inside the modal and times out too, so `dismissOpenPanels()` presses **Escape** until no visible `<dialog>` remains — the first press left one dialog of two still open, so a single press is not enough.
+
+> [!NOTE]
+> **Probing a previously-failed account:** `loadFreshAdobeAccounts()` subtracts the consumed ledger, so it can never hand back an account that already failed. `experiment-v8.spec.ts` therefore mines `reports/adobe_results_*.csv` for emails that only ever failed, re-joins the password from the account source, and targets those — ideal for reproducing a late-flow bug, since such an account is past onboarding and reaches the editor in ~30s. `V8_MODE=verify` runs the production `downloadDesign()` at the point `script.spec.ts` calls it, so the real code path can be regression-checked without consuming a fresh account.
 
 ---
 

@@ -43,6 +43,14 @@ const GPU_ARGS = ['--ignore-gpu-blocklist', '--enable-gpu', '--enable-webgl', '-
 const adobeWorkers = GPU_MODE === 'headed' ? 1 : (BULK ? WORKERS : undefined);
 const adobeLaunchOptions = GPU_MODE === 'off' ? undefined : { args: GPU_ARGS };
 
+// GPU_MODE only means anything to Chromium: `channel: 'chromium'` selects the full
+// browser in new headless mode, and GPU_ARGS are Chromium command-line flags. Keep
+// them on the Chromium projects so the Firefox project doesn't inherit either.
+const chromiumUse = {
+  channel: (GPU_MODE === 'headless' ? 'chromium' : undefined) as 'chromium' | undefined,
+  launchOptions: adobeLaunchOptions,
+};
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
@@ -53,7 +61,12 @@ export default defineConfig({
     ['html'],
     [path.resolve(__dirname, 'src/adobe/reporter.ts')],
   ],
-  timeout: 360_000,
+  // Raised from 360s to fit the share→publish retry (EditorDashboard.sharePublishWithRetry).
+  // A single pass of that leg can already reach ~360s on its own worst case (two 180s file-prep
+  // waits), so a second attempt had no room under the old budget. sharePublishWithRetry checks
+  // the remaining budget before starting a retry, so this ceiling bounds the retry rather than
+  // being spent by default — passing accounts averaged 84s in the 2026-08-05 run.
+  timeout: 600_000,
   expect:{
     timeout: 120_000,
   },
@@ -63,8 +76,6 @@ export default defineConfig({
     trace: BULK ? 'off' : 'retain-on-failure',
     screenshot: 'only-on-failure',
     headless: GPU_MODE !== 'headed',
-    channel: GPU_MODE === 'headless' ? 'chromium' : undefined,
-    launchOptions: adobeLaunchOptions,
   },
   projects: [
     {
@@ -74,13 +85,24 @@ export default defineConfig({
         : /tests[\\/]adobe[\\/].+\.spec\.ts/,
       testIgnore: adobeLowNetworkDebugEnabled ? undefined : adobeDebugSpecPattern,
       retries: 0,
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], ...chromiumUse },
+    },
+    {
+      // Same adobe specs on Firefox. GPU_MODE/GPU_ARGS do not apply here (Chromium-only),
+      // so if Adobe Express complains about performance, run GPU_MODE = 'headed' instead.
+      name: 'adobe-firefox',
+      testMatch: adobeLowNetworkDebugEnabled
+        ? adobeDebugSpecPattern
+        : /tests[\\/]adobe[\\/].+\.spec\.ts/,
+      testIgnore: adobeLowNetworkDebugEnabled ? undefined : adobeDebugSpecPattern,
+      retries: 0,
+      use: { ...devices['Desktop Firefox'] },
     },
     {
       name: 'internal-chromium',
       testMatch: /tests[\\/]internal[\\/].+\.spec\.ts/,
       retries: 0,
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], ...chromiumUse },
     },
   ],
 });

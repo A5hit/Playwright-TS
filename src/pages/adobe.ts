@@ -89,6 +89,17 @@ export class AdobePage {
         await expect(this.loadIndicator).toHaveCount(0, { timeout: 30_000 });
     }
 
+    /**
+     * @deprecated For the template flow use EditorDashboard.downloadDesign() instead.
+     *
+     * This belongs to the Firefly text-to-image path: downld_icon/downld_btn are labelled
+     * "Download" there and the panel offers a "Selected image" radio. The template editor
+     * exposes none of that — its trigger is an unlabelled shadow-DOM
+     * [data-testid="editor-download-button"] and the panel has a file-format picker
+     * (verified by tests/adobe/experiment-v8.spec.ts). It is also bound to whichever page
+     * AdobePage was constructed with, which is the login tab in the current flow, not the
+     * tab holding the design. Kept for the generation flow (wait_for_generation) only.
+     */
     async download_img(workerIndex: number = 0): Promise<string | null> {
         // waiting for the download event BEFORE clicking the final button
         const downloadPromise = this.page.waitForEvent('download',{timeout: 260000});
@@ -124,11 +135,16 @@ export class AdobePage {
     }
 
     async waitForDashboard(): Promise<void> {
+        // Adobe now lands the post-login dashboard on express.adobe.com (it used to be
+        // new.express.adobe.com), so accept either host. Skip the intermediate
+        // ?postlogin=true redirect hops on the way there — the dashboard isn't up yet.
         try {
-            await this.page.waitForURL(/new.express.adobe.com/, { timeout: 120_000 });
-            await expect(this.page).toHaveURL(/.*new\.express\.adobe\.com/);
+            await this.page.waitForURL(
+                url => /^(new\.)?express\.adobe\.com$/.test(url.hostname) && !url.searchParams.has('postlogin'),
+                { timeout: 120_000 }
+            );
         } catch (e) {
-            throw new Error(`Failed to navigate to Adobe Dashboard (new.express.adobe.com). Login likely failed. Original error: ${e}`);
+            throw new Error(`Failed to navigate to Adobe Dashboard (express.adobe.com). Login likely failed. Original error: ${e}`);
         }
 
         await this.installDashboardInterruptionHandlers();
@@ -314,8 +330,9 @@ export class AdobePage {
         // If we have both pieces, fire the API
         if (this.capturedAuthHeader && this.capturedOwnerEntity) {
             try {
+                // Same host the dashboard is on (express.adobe.com or new.express.adobe.com).
                 const response = await this.page.request.patch(
-                    'https://new.express.adobe.com/service/uds/userdocs/uds-projectx',
+                    new URL('/service/uds/userdocs/uds-projectx', this.page.url()).href,
                     {
                         headers: {
                             'authorization': this.capturedAuthHeader,
