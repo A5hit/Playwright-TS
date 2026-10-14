@@ -40,12 +40,12 @@ defineAdobeAccountTests('script flow', async ({ page, context, account, stepTrac
   stepTracker.setStep('Activate by Lets Go');
   await adobe.skipLetsGoViaAPI(account.email);
 
-//   stepTracker.setStep('Navigate to Fixed Postcard');
-//   // Settle buffer to let late dashboard content/interrupts render.
-//   await page.waitForTimeout(1200);
-//   const postcardPage = await context.newPage();
-//   await postcardPage.goto(FIXED_POSTCARD_URL, { waitUntil: 'load' });
-//   editor = new EditorDashboard(postcardPage);   // rebind; original tab stays open
+  stepTracker.setStep('Navigate to Fixed Postcard');
+  // Settle buffer to let late dashboard content/interrupts render.
+  await page.waitForTimeout(1200);
+  const postcardPage = await context.newPage();
+  await postcardPage.goto(FIXED_POSTCARD_URL, { waitUntil: 'load' });
+  editor = new EditorDashboard(postcardPage);   // rebind; original tab stays open
 
 
   // ── OLD flow (blank Square canvas → search inside editor) — replaced by v7's dashboard search ──
@@ -68,8 +68,8 @@ defineAdobeAccountTests('script flow', async ({ page, context, account, stepTrac
 
   // The editor's tutorial/coachmark still appears after a template opens; skipTutorial
   // registers a persistent "Skip tour" handler that also protects the Share click.
-//   stepTracker.setStep('Skip Tutorial dialog if visible');
-//   await editor.skipTutorial();
+  stepTracker.setStep('Skip Tutorial dialog if visible');
+  await editor.skipTutorial();
 
   // stepTracker.setStep('Redirect to edit');
   // await adobe.shortcut();
@@ -91,9 +91,9 @@ defineAdobeAccountTests('script flow', async ({ page, context, account, stepTrac
   // account in the 2026-08-18 run failed at this step — and it also still clicked the
   // Firefly-era 'Selected image' radio, which this editor's download panel does not have.
   // Both confirmed live by tests/adobe/experiment-v8.spec.ts.
-//   stepTracker.setStep('Download');
-//   const filePath = await editor.downloadDesign(testInfo.workerIndex);
-//   console.log(`File saved to: ${filePath}`);
-//   expect(filePath).toBeTruthy();
+  stepTracker.setStep('Download');
+  const filePath = await editor.downloadDesign(testInfo.workerIndex);
+  console.log(`File saved to: ${filePath}`);
+  expect(filePath).toBeTruthy();
 
 });
