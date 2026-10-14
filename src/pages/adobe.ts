@@ -135,21 +135,16 @@ export class AdobePage {
     }
 
     async waitForDashboard(): Promise<void> {
-        // Accept BOTH dashboard hosts. A successful login lands on new.express.adobe.com
-        // for most accounts, but some (observed on education/regional accounts) settle on
-        // the bare express.adobe.com host instead — the same functional dashboard ("What
-        // would you like to create today?"), just a different origin. Gating only on the
-        // "new." host timed out those working sessions before the interruption handlers
-        // below could even install. Downstream steps are host-independent: the postcard is
-        // opened via an explicit goto to new.express.adobe.com regardless of where the
-        // dashboard landed. The optional "new." prefix matches either host and still
-        // excludes the auth origin (auth.services.adobe.com / adobeid-na1…).
-        const dashboardUrlPattern = /(?:new\.)?express\.adobe\.com/;
+        // Adobe now lands the post-login dashboard on express.adobe.com (it used to be
+        // new.express.adobe.com), so accept either host. Skip the intermediate
+        // ?postlogin=true redirect hops on the way there — the dashboard isn't up yet.
         try {
-            await this.page.waitForURL(dashboardUrlPattern, { timeout: 120_000 });
-            await expect(this.page).toHaveURL(dashboardUrlPattern);
+            await this.page.waitForURL(
+                url => /^(new\.)?express\.adobe\.com$/.test(url.hostname) && !url.searchParams.has('postlogin'),
+                { timeout: 120_000 }
+            );
         } catch (e) {
-            throw new Error(`Failed to navigate to Adobe Dashboard (new.express.adobe.com or express.adobe.com). Login likely failed. Original error: ${e}`);
+            throw new Error(`Failed to navigate to Adobe Dashboard (express.adobe.com). Login likely failed. Original error: ${e}`);
         }
 
         await this.installDashboardInterruptionHandlers();
@@ -335,8 +330,9 @@ export class AdobePage {
         // If we have both pieces, fire the API
         if (this.capturedAuthHeader && this.capturedOwnerEntity) {
             try {
+                // Same host the dashboard is on (express.adobe.com or new.express.adobe.com).
                 const response = await this.page.request.patch(
-                    'https://new.express.adobe.com/service/uds/userdocs/uds-projectx',
+                    new URL('/service/uds/userdocs/uds-projectx', this.page.url()).href,
                     {
                         headers: {
                             'authorization': this.capturedAuthHeader,
