@@ -61,7 +61,9 @@ export class EditorDashboard {
         this.publishTab = page.getByRole('tab', { name: 'Publish' });
         this.createLinkBtn = page.getByText('Create link').first();
         this.copyLinkBtn = page.getByRole('button', { name: 'Copy link' });
-        this.publishUrl = page.locator('a[href^="https://new.express.adobe.com/publishedV2/"]').first();
+        // Published links moved from new.express.adobe.com to express.adobe.com (seen
+        // 2026-10-30), so match the panel's data-testid and accept either host.
+        this.publishUrl = page.locator('a[data-testid="published-url"], a[href*="express.adobe.com/publishedV2/"]').first();
         // Download controls, all addressed by data-testid rather than role/label.
         // The v8 probe found the top-nav trigger renders as
         //   <sp-button id="download-btn" data-testid="editor-download-button">
@@ -175,7 +177,7 @@ export class EditorDashboard {
             await this.copyLinkBtn.click({ timeout: 20000 }).catch(() => { /* link still readable below */ });
         }
 
-        await expect(this.publishUrl).toHaveAttribute('href', /https:\/\/new\.express\.adobe\.com\/publishedV2\//, { timeout: 30000 });
+        await expect(this.publishUrl).toHaveAttribute('href', /https:\/\/(new\.)?express\.adobe\.com\/publishedV2\//, { timeout: 30000 });
 
         const link = await this.publishUrl.getAttribute('href') ?? '';
         console.log('Publish Link: ', link);

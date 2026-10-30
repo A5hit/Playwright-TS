@@ -176,7 +176,7 @@ All locators defined in the [EditorDashboard constructor](file:///c:/Users/QA/We
 | `viewOnlyLink` | `getByRole('menuitem', { name: 'View-only link' })` | `openViewOnlyLink` |
 | `createLinkBtn` | `getByText('Create link').first()` | `clickCreateLink` |
 | `copyLinkBtn` | `getByRole('button', { name: 'Copy link' })` | `clickCreateLink`, `clickCopyLink` |
-| `publishUrl` | `locator('a[href^="https://new.express.adobe.com/publishedV2/"]').first()` | `clickCreateLink`, `clickCopyLink` |
+| `publishUrl` | `locator('a[data-testid="published-url"], a[href*="express.adobe.com/publishedV2/"]').first()` | `clickCreateLink`, `clickCopyLink` |
 | `downloadTrigger` | `locator('[data-testid="editor-download-button"]')` | `downloadDesign` |
 | `fileFormatPicker` | `locator('[data-testid="file-format-picker"]')` | *(unused — defaults to PNG)* |
 | `downloadCommitBtn` | `locator('[data-testid="download-commit-button"]')` | `downloadDesign` |
