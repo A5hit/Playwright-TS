@@ -5,6 +5,19 @@ import { MsProvider} from "../../src/pages/msProvider";
 import { EditorDashboard } from '../../src/pages/editorDashboard';
 
 const FIXED_POSTCARD_URL = 'https://new.express.adobe.com/design/template/urn:aaid:sc:VA6C2:f2c97bf0-1039-5b0d-be7a-528c0060757b?category=text&entryPoint=template&taskID=postcard';
+const KVS_POSTCARD_URL = 'https://new.express.adobe.com/design/template/urn:aaid:sc:VA6C2:fcf64e48-8456-5141-9d68-55b0d404d468';
+const BIHAR_POSTCARD_URL = 'https://new.express.adobe.com/design/template/urn:aaid:sc:VA6C2:e1cb7d5d-5c61-5064-bfb1-a1d1e94b693e';
+
+// Picks the postcard by email domain:
+//   KVS   — *.kvs.ac.in (cha.kvs.ac.in) or kvsro*.in (kvsrogurugram.in)
+//   Bihar — <division>edu.in, any subdomain (bh.patnaedu.in, ga.magadhedu.in)
+// Anything else falls back to FIXED_POSTCARD_URL.
+function postcardUrlFor(email: string): string {
+  const domain = email.split('@')[1]?.trim().toLowerCase() ?? '';
+  if (/(^|\.)kvs\.ac\.in$/.test(domain) || /^kvsro[a-z]*\.in$/.test(domain)) return KVS_POSTCARD_URL;
+  if (/(^|\.)[a-z]+edu\.in$/.test(domain)) return BIHAR_POSTCARD_URL;
+  return FIXED_POSTCARD_URL;
+}
 
 defineAdobeAccountTests('script flow', async ({ page, context, account, stepTracker }, testInfo) => {
     const adobe = new AdobePage(page);
@@ -44,7 +57,7 @@ defineAdobeAccountTests('script flow', async ({ page, context, account, stepTrac
   // Settle buffer to let late dashboard content/interrupts render.
   await page.waitForTimeout(1200);
   const postcardPage = await context.newPage();
-  await postcardPage.goto(FIXED_POSTCARD_URL, { waitUntil: 'load' });
+  await postcardPage.goto(postcardUrlFor(account.email), { waitUntil: 'load' });
   editor = new EditorDashboard(postcardPage);   // rebind; original tab stays open
 
 
@@ -76,6 +89,7 @@ defineAdobeAccountTests('script flow', async ({ page, context, account, stepTrac
   
   // stepTracker.setStep('Wait for Img Generation');
   // await adobe.wait_for_generation();
+
 
   // stepTracker.setStep('Open In Editor');
   // await editor.clickOpenInEditor();
